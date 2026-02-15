@@ -22,37 +22,83 @@ UPLOAD_DIR = Path("uploaded_docs")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 #Initialize Pinecone Instance
-pc=Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENVIRONMENT)
-spec=ServerlessSpec(
-    cloud="aws",
-    region=PINECONE_ENVIRONMENT,
-)
+# pc=Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENVIRONMENT)
+# spec=ServerlessSpec(
+#     cloud="aws",
+#     region=PINECONE_ENVIRONMENT,
+# )
 
-existing_indexex=[i["name"] for i in pc.list_indexes()]
+# existing_indexex=[i["name"] for i in pc.list_indexes()]
 
-if PINECONE_INDEX_NAME not in existing_indexex:
-    pc.create_index(
-        name=PINECONE_INDEX_NAME,
-        dimension=768, 
-        metric="cosine", 
-        spec=spec
-    )
-    while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
-        print("Waiting for Pinecone index to be ready...")
-        time.sleep(5)
+# if PINECONE_INDEX_NAME not in existing_indexex:
+#     pc.create_index(
+#         name=PINECONE_INDEX_NAME,
+#         dimension=768, 
+#         metric="cosine", 
+#         spec=spec
+#     )
+#     while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
+#         print("Waiting for Pinecone index to be ready...")
+#         time.sleep(5)
         
-index=pc.Index(PINECONE_INDEX_NAME)
+# index=pc.Index(PINECONE_INDEX_NAME)
+
+pc = None
+index = None
+
+def get_pinecone_index():
+    global pc, index
+
+    if pc is None or index is None:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+
+        spec = ServerlessSpec(
+            cloud="aws",
+            region=PINECONE_ENVIRONMENT,
+        )
+
+        existing_indexes = [i["name"] for i in pc.list_indexes()]
+
+        if PINECONE_INDEX_NAME not in existing_indexes:
+            pc.create_index(
+                name=PINECONE_INDEX_NAME,
+                dimension=768,
+                metric="cosine",
+                spec=spec
+            )
+            while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
+                print("Waiting for Pinecone index to be ready...")
+                time.sleep(5)
+
+        index = pc.Index(PINECONE_INDEX_NAME)
+
+    return index
+
 
 #Load , split , embed and upsert documents 
+
+
+embed_model = None
+
+def get_embed_model():
+    global embed_model
+    if embed_model is None:
+        embed_model = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-mpnet-base-v2"
+        )
+    return embed_model
+
 
 def load_vectorstore(uploaded_files):
     # embed_model=GoogleGenerativeAIEmbeddings(
     #     model="models/text-embedding-004",
     #     google_api_key=GOOGLE_API_KEY
     # )
-    embed_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-mpnet-base-v2"
-    )
+    index = get_pinecone_index()
+    embed_model = get_embed_model()
+    # embed_model = HuggingFaceEmbeddings(
+    #     model_name="sentence-transformers/all-mpnet-base-v2"
+    # )
     file_paths=[]
     
     # 1. Upload
